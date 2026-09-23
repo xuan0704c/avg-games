@@ -7,6 +7,22 @@ init python:
         return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
 
 
+    def _white_to_transparent(surf):
+        """把白底照片的背景抠成透明（素材组交付的是白色背景工具图）。
+
+        对接近纯白的像素（RGB 均 > 250）写入 alpha=0，再交给 smoothscale
+        缩放时做平滑过渡，避免放置后棋盘上出现白色底块。
+        """
+        surf = surf.convert_alpha()
+        w, h = surf.get_size()
+        for y in range(h):
+            for x in range(w):
+                r, g, b, a = surf.get_at((x, y))
+                if r > 250 and g > 250 and b > 250:
+                    surf.set_at((x, y), (r, g, b, 0))
+        return surf
+
+
     class StarPatternDisplayable(renpy.Displayable):
         """星纹密码 渲染+输入层。
 
@@ -40,7 +56,7 @@ init python:
             self._load_images()
 
         def _load_images(self):
-            """加载工具 PNG 并缩放到基础尺寸（240x160 / 160x160 / 320x80）"""
+            """加载工具 PNG：白底抠透明后缩放到基础尺寸（240x160 / 160x160 / 320x80）"""
             cs = self.cell_size
             base_sizes = {
                 "L形":   (3 * cs, 2 * cs),
@@ -50,7 +66,7 @@ init python:
                 "长条形": (4 * cs, 1 * cs),
             }
             for name, path in SHAPE_IMAGES.items():
-                surf = renpy.load_surface(path)
+                surf = _white_to_transparent(renpy.load_surface(path))
                 tw, th = base_sizes[name]
                 self.shape_images[name] = pygame.transform.smoothscale(surf, (tw, th))
 
@@ -78,26 +94,39 @@ init python:
 
             surf = pygame.Surface((width, height), pygame.SRCALPHA)
 
-            # 1. 6x6 网格（程序画，无底图）
+            # 1. 6x6 网格（程序画，无底图）：已占用格子金色高亮，未占用深蓝
+            occupied = set()
+            for block in self.puzzle.placed_blocks:
+                gx, gy = block["gx"], block["gy"]
+                for (dx, dy) in block["cells"]:
+                    occupied.add((gx + dx, gy + dy))
             for y in range(self.puzzle.grid_height):
                 for x in range(self.puzzle.grid_width):
                     px = gsx + x * cs
                     py = gsy + y * cs
-                    pygame.draw.rect(surf, (44, 62, 80, 200), (px + 1, py + 1, cs - 2, cs - 2))
+                    if (x, y) in occupied:
+                        # 已占用：金色底，与未占用格子明显区分
+                        pygame.draw.rect(surf, (255, 200, 40, 220), (px + 1, py + 1, cs - 2, cs - 2))
+                    else:
+                        pygame.draw.rect(surf, (44, 62, 80, 200), (px + 1, py + 1, cs - 2, cs - 2))
                     pygame.draw.rect(surf, (127, 140, 141, 160), (px, py, cs, cs), 1)
 
-            # 2. 已放置的块（blit 工具 PNG）
+            # 2. 已放置的块（blit 工具 PNG，按旋转后几何中心对齐）
             for block in self.puzzle.placed_blocks:
                 name = block["name"]
                 rot = block["rotation"]
                 gx, gy = block["gx"], block["gy"]
                 img = self._rotated_image(name, rot)
-                # 旋转后居中：基准格左上角 + 原始中心偏移
-                orig = self.shape_images[name]
-                base_x = gsx + gx * cs + orig.get_width() // 2
-                base_y = gsy + gy * cs + orig.get_height() // 2
-                bx = base_x - img.get_width() // 2
-                by = base_y - img.get_height() // 2
+                # 用旋转后 cells 的几何中心对齐（与拖拽预览一致，避免旋转后偏移）
+                cells = block["cells"]
+                xs = [c[0] for c in cells]
+                ys = [c[1] for c in cells]
+                gcx = (min(xs) + max(xs) + 1) / 2.0
+                gcy = (min(ys) + max(ys) + 1) / 2.0
+                cx_px = gsx + (gx + gcx) * cs
+                cy_px = gsy + (gy + gcy) * cs
+                bx = cx_px - img.get_width() / 2
+                by = cy_px - img.get_height() / 2
                 surf.blit(img, (int(bx), int(by)))
 
             # 3. 左侧可用图形块列表（blit PNG）
