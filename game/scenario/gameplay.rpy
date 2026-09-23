@@ -13,6 +13,8 @@ label chinese_star_puzzle_loop:
         "退出星空圆盘游戏。"
         return
     elif result == "start":
+        # 每次开始游玩都重新随机布局（恒星随机分布+目标圈随之生成）
+        $ star_puzzle_game.reset_level()
         call screen chinese_star_puzzle_game(game=star_puzzle_game)
         $ game_result = _return
         if game_result == "back":
