@@ -8,6 +8,8 @@ init python:
 label start:
     play music "audio/VN Intro.mp3"
     scene black with fade
+    # 调试面板常驻：进入剧情即显示（开发期用，交付前移除）
+    show screen debug_info
     # 游戏标题画面
     show text "张壁古堡·星象启秘" at Position(xpos=0.5, ypos=0.4, xanchor=0.5)
     with fade

@@ -10,6 +10,15 @@ init python:
         "长条形": [(0, 0), (1, 0), (2, 0), (3, 0)],
     }
 
+    # 形状名 -> PNG 素材路径（相对 game/ 目录）
+    SHAPE_IMAGES = {
+        "L形":   "images/microgames/星纹密码/pat_shape_l_480x320.png",
+        "Z形":   "images/microgames/星纹密码/pat_shape_z_480x320.png",
+        "T形":   "images/microgames/星纹密码/pat_shape_t_480x320.png",
+        "田字形": "images/microgames/星纹密码/pat_shape_square_320x320.png",
+        "长条形": "images/microgames/星纹密码/pat_shape_bar_640x160.png",
+    }
+
     class StarPatternPuzzle:
         def __init__(self, grid_width=6, grid_height=6):
             self.grid_width = grid_width
@@ -24,6 +33,7 @@ init python:
                 {"name": "长条形", "cells": SHAPE_DEFINITIONS["长条形"], "color": "#118AB2","amount":6},
             ]
 
+            self.placed_blocks = []  # 已放置的块：[{"name", "gx", "gy", "rotation", "cells"}]
             self.dragging_shape = None
             self.game_complete = False  # 已正确初始化
 
@@ -32,6 +42,7 @@ init python:
             if shape_index < len(self.available_shapes):
                 shape = self.available_shapes[shape_index]
                 self.dragging_shape = copy.deepcopy(shape)
+                self.dragging_shape["rotation"] = 0
                 # 从可用列表中移除
                 self.available_shapes[shape_index]["amount"] -= 1
                 if self.available_shapes[shape_index]["amount"] == 0:
@@ -48,6 +59,7 @@ init python:
             min_y = min(c[1] for c in rotated_cells)
             normalized_cells = [(x - min_x, y - min_y) for (x, y) in rotated_cells]
             self.dragging_shape["cells"] = normalized_cells
+            self.dragging_shape["rotation"] = (self.dragging_shape.get("rotation", 0) + 1) % 4
 
         def can_place_shape(self, grid_x, grid_y):
             """判断当前拖拽的图形块是否能放置在网格的(grid_x, grid_y)位置"""
@@ -68,7 +80,17 @@ init python:
 
             for (dx, dy) in self.dragging_shape["cells"]:
                 x, y = grid_x + dx, grid_y + dy
-                self.grid[y][x] = 1
+                self.grid[y][x] = self.dragging_shape["color"]
+
+            # 记录已放置块，供渲染层 blit PNG
+            self.placed_blocks.append({
+                "name": self.dragging_shape["name"],
+                "gx": grid_x,
+                "gy": grid_y,
+                "rotation": self.dragging_shape.get("rotation", 0),
+                "cells": copy.deepcopy(self.dragging_shape["cells"]),
+            })
+
             #放置成功清除拖拽状态
             self.dragging_shape = None
             # 放置后检查胜利条件

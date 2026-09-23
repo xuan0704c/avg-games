@@ -47,13 +47,9 @@ label chapter1_act1:
     play sound "audio/sound/Chapter 1/a1s2.mp3" fadeout 0.3
     narrator "翻开第一页，爷爷的字迹跃入眼帘："
 
-    # 显示爷爷立绘
-    show p2 at Position(xpos=0.7, ypos=0.95, yanchor=1.0)
     with dissolve
-    p2 "这古堡，我守了一辈子，以后你替我去看，替我记。"
+    p2 "{color=#FFCC00}这古堡，我守了一辈子，以后你替我去看，替我记。{/color}"
 
-    # 隐藏爷爷立绘
-    hide p2
     with dissolve
     narrator "儿时的画面突然涌来：夏夜的古堡广场，爷爷搬着竹椅坐在你身边，指着天上的星星说'那是奎宿，守着咱们古堡的文运'，你嫌他唠叨，扒拉着冰棍敷衍两句，就跑去和小伙伴追着灯笼跑。"
 
@@ -81,7 +77,8 @@ label chapter1_act1:
     # 门外传来急促的脚步声
     play sound "audio/sound/Chapter 1/a1s6.mp3" fadeout 0.3
     narrator "正愣神时，门外传来急促的脚步声，石板路被踩得'噔噔'响。"
-
+    # 隐藏小远立绘
+    hide p1
     # 显示村支书立绘
     show p3 at Position(xpos=0.7, ypos=0.95, yanchor=1.0)
     with dissolve
@@ -151,13 +148,9 @@ label chapter1_act2:
     play sound "audio/sound/Chapter 1/a2s2.mp3" fadeout 0.3
     narrator "你拾级而上，走到魁星楼下，翻开日记，其中一页画着魁星楼的精细简图，旁边用红笔写着："
 
-    # 显示爷爷立绘（日记内容）
-    show p2 at Position(xpos=0.7, ypos=0.95, yanchor=1.0)
     with dissolve
     p2 "魁星楼，古堡之眼。登楼可望全堡，夜可观星。楼内楼外共有三盏引路灯，各应星宿，星灯相照，堡脉方通。"
 
-    # 隐藏爷爷立绘
-    hide p2
     with dissolve
     narrator "你抬头望向魁星楼，指尖抚过楼身的青砖，上面似乎有淡淡的星纹刻痕，轻声自语："
 
@@ -204,13 +197,8 @@ label chapter1_act2_scene1:
 
     narrator "你走到壁灯前，蹲下身子，指尖轻轻拂过灯座下的星形刻痕，触感微凉，这刻痕与日记里画的星标一模一样。翻开日记对照，爷爷的字迹清晰可见："
 
-    # 显示爷爷立绘（日记内容）
-    show p2 at Position(xpos=0.5, ypos=0.95, yanchor=1.0)
-    with dissolve
     p2 "魁星楼一楼灯位，对应二十八星宿之'张宿'。张宿为南方朱雀第五宿，七星连珠，主昌盛、主文运。灯亮则古堡文运昌，灯灭则文运晦。此灯年久失修，线非断而乱，需按星轨重接，方得光亮。"
 
-    # 隐藏爷爷立绘
-    hide p2
     with dissolve
     # 你抬手打开灯座后盖
     play sound "audio/sound/Chapter 1/a2s3.mp3" fadeout 0.3
@@ -220,12 +208,8 @@ label chapter1_act2_scene1:
 
     narrator "你盯着日记上的张宿星图——七颗星辰由细红笔连线，从西南到东北，形成一个弯弯的弧状，星轨顺序清晰可见。忽然想起爷爷日记里反复圈画的一句话，被红笔描了三遍："
 
-    show p2 at Position(xpos=0.5, ypos=0.95, yanchor=1.0)
-    with dissolve
-    p2 "'星脉之连，非直而通，需循星轨，顺星而行，方合天道。'"
+    p2 "{color=#FFCC00}'星脉之连，非直而通，需循星轨，顺星而行，方合天道。'{/color}"
 
-    hide p2
-    with dissolve
     p1 "所以不是简单接上就行，得按星星的连接顺序接，顺着张宿的星轨来，才能通脉亮灯。"
 
     # 你让老李递来剥线钳
@@ -237,18 +221,20 @@ label chapter1_act2_scene1:
     narrator "壁灯'啪'地亮起。"
 
     # 【游戏触发预留位置】星团拼图游戏关卡一
-    pass # 【游戏触发预留位置】星团拼图游戏关卡一（张宿七星连珠）
+    jump microgame01
 
+label microgame01_end:
+    hide p4
     show p5 at Position(xpos=0.7, ypos=0.95, yanchor=1.0)
     with dissolve
     guardian "张宿主昌盛，灯亮则文运兴。小子，你接对了，接的不只是线，是古堡的星脉。"
-
+    hide p5
+    show p4 at Position(xpos=0.7, ypos=0.95, yanchor=1.0)
     p4 "嘿，还真亮了！你爷爷这笔记也太神了！这哪里是记日记，这是藏着宝贝啊！"
 
     p1 "原来爷爷说的'循星轨'，是这个意思。他守的从来不是灯，是古堡的星脉。"
 
     # 隐藏所有立绘
-    hide p5
     hide p4
     hide p1
     with dissolve
@@ -276,12 +262,8 @@ label chapter1_act2_scene2:
 
     narrator "翻开日记，爷爷的字迹带着一丝郑重："
 
-    show p2 at Position(xpos=0.7, ypos=0.95, yanchor=1.0)
-    with dissolve
-    p2 "魁星楼二楼灯位，对应二十八星宿之'奎宿'。奎为天之武库，七星相贯，主文运，亦主兵事，乃古堡星象阵的核心星宿。此灯最要紧，不可灭，藤缠灯则光蔽，星脉堵；除尽野藤，扫尽尘垢，方得天光入，星脉通。"
+    p2 "{color=#FFCC00}魁星楼二楼灯位，对应二十八星宿之'奎宿'。奎为天之武库，七星相贯，主文运，亦主兵事，乃古堡星象阵的核心星宿。此灯最要紧，不可灭，藤缠灯则光蔽，星脉堵；除尽野藤，扫尽尘垢，方得天光入，星脉通。{/color}"
 
-    hide p2
-    with dissolve
     narrator "看着爷爷写下的内容，你想到了什么。于是你决定："
 
     menu:
@@ -300,9 +282,23 @@ label chapter1_act2_scene2_choice_a:
     narrator "你握住刀柄，一刀一刀割着枯藤，藤条又粗又韧，刀刃有些钝，割起来格外费力，每割一下，都要使出不小的力气。你的手心被刀柄磨得发红，汗水顺着额头滴落，滴在青石地上，晕开小小的湿痕。但每割断一根，路灯就露出一分，灯杆上的铜皮也渐渐显露，星纹似乎也亮了一分。"
 
     # 【游戏触发预留位置】星纹密码游戏
-    pass # 【游戏触发预留位置】星纹密码游戏（选项A）
+    $ microgame02_return = "choice_a"
+    jump microgame02
 
-    jump chapter1_act2_scene2_continue
+label microgame02_end:
+    if microgame02_return == "choice_a":
+        jump chapter1_act2_scene2_continue
+    elif microgame02_return == "choice_b":
+        hide p4
+        with dissolve
+        jump chapter1_act2_scene2_continue
+    elif microgame02_return == "choice_c":
+        show p4 at Position(xpos=0.7, ypos=0.95, yanchor=1.0)
+        with dissolve
+        p4 "嘿，你小子还挺会找窍门！不愧是你爷爷的孙子，骨子里带着心细。"
+        hide p4
+        with dissolve
+        jump chapter1_act2_scene2_continue
 
 label chapter1_act2_scene2_choice_b:
     show p4 at Position(xpos=0.7, ypos=0.95, yanchor=1.0)
@@ -316,7 +312,7 @@ label chapter1_act2_scene2_choice_b:
     narrator "他从工具箱里拿出重型园艺剪，'咔嚓咔嚓'几剪子下去，粗韧的枯藤应声而落，干脆利落，没用几分钟，缠在灯杆上的枯藤就被清理得干干净净。你在一旁看着，不得不佩服他的手艺，连灯杆缝隙里的细藤，都被他用小钳子挑了出来。"
 
     # 【游戏触发预留位置】打开老李的工具箱游戏
-    pass # 【游戏触发预留位置】打开老李的工具箱游戏（选项B）
+    jump microgame02
 
     hide p4
     with dissolve
@@ -328,15 +324,8 @@ label chapter1_act2_scene2_choice_c:
     narrator "你发现几根主藤的根部已经枯死松动，与灯杆分离，只要找准这些主根位置，轻轻一扯，就能带下一大片缠藤。你顺着主根的方向，先扯断几根主藤，再用手掰掉细藤，没一会儿，大部分藤蔓就被清理干净，剩下的零星细藤，用手指就能掐断。"
 
     # 【游戏触发预留位置】寻找位置游戏
-    pass # 【游戏触发预留位置】寻找位置游戏（选项C）
-
-    show p4 at Position(xpos=0.7, ypos=0.95, yanchor=1.0)
-    with dissolve
-    p4 "嘿，你小子还挺会找窍门！不愧是你爷爷的孙子，骨子里带着心细。"
-
-    hide p4
-    with dissolve
-    jump chapter1_act2_scene2_continue
+    $ microgame02_return = "choice_c"
+    jump microgame02
 
 label chapter1_act2_scene2_continue:
     narrator "无论选择哪个，最终枯藤都被清理干净，高杆灯露出全貌，灯杆上的铜皮星纹在微光下清晰可见。"
@@ -380,12 +369,8 @@ label chapter1_act2_scene3:
 
     narrator "你走到最后这盏灯前，这是魁星楼三盏引路灯的最后一盏，位置最偏，却被爷爷在日记里用红笔圈了重点，标注了三遍。翻开日记，爷爷的字迹带着一丝温柔："
 
-    show p2 at Position(xpos=0.7, ypos=0.95, yanchor=1.0)
-    with dissolve
     p2 "'魁星楼下阶前灯，对应二十八星宿之'壁宿'。壁宿为北方玄武第七宿，主守护、主藏秘，与张宿合为'张壁'，乃古堡之名的由来。此灯虽偏，却是星象阵的收尾，不可或缺。灯若不亮，非线路之故，或与碑下之物有关，星石藏于碑，星脉系于石。'"
 
-    hide p2
-    with dissolve
     narrator "你蹲下身检查灯座，线路完好无损，接头也没有松动，可灯就是毫无动静，像沉睡了一般。正疑惑时，脚边被什么硬东西硌了一下，低头一看，碑座旁的浮土里，露出一角锈迹斑斑的铁盒，被泥土半掩着。"
 
     p1 "这是什么？藏在碑座下，难道是爷爷说的碑下之物？"
@@ -397,8 +382,9 @@ label chapter1_act2_scene3:
     narrator "你轻轻扣开铁盒，"
 
     # 【游戏触发预留位置】华容道游戏
-    pass # 【游戏触发预留位置】华容道游戏（壁宿星石）
+    jump microgame03
 
+label microgame03_end:
     narrator "里面铺着一层红布，红布上放着一本更旧的手抄本，封皮是泛黄的宣纸，用线装订着，封面上用工整的小楷写着《张壁星象考》，旁边还放着两块黑漆漆的星石。"
 
     p1 "这就是爷爷说的星石？居然有三块。"
@@ -468,12 +454,8 @@ label chapter1_act3:
 
     narrator "你站在顶层凭栏处，迎着微凉的夜风，翻开爷爷的《张壁往事》第一册，翻到最后一页。在星光与灯光的交映下，你发现这一页的角落，有一行极淡的字迹，也许是冥冥中的指引，字迹带着一丝颤抖，却依旧坚定："
 
-    show p2 at Position(xpos=0.7, ypos=0.95, yanchor=1.0)
-    with dissolve
-    p2 "'星象既明，庙宇当启。可罕庙中，藏有古堡千年之谜。欲知地道真容，需先解庙堂之秘。'"
+    p2 "{color=#FFCC00}'星象既明，庙宇当启。可罕庙中，藏有古堡千年之谜。欲知地道真容，需先解庙堂之秘。'{/color}"
 
-    hide p2
-    with dissolve
     narrator "你猛地想起，刚才在魁星楼一楼整理壁灯时，好像看见老木柜的后面，有一扇不起眼的小木门，被布帘遮着，门把手上刻着星纹，当时只顾着修灯，并未在意。"
 
     p1 "可罕庙……爷爷的意思是，下一步要去可罕庙？"
