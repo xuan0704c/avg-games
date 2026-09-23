@@ -286,6 +286,8 @@ label chapter1_act2_scene2_choice_a:
     jump microgame02
 
 label microgame02_end:
+    # 兜底：调试面板直接跳入小游戏时该变量未定义，默认按 choice_a 分支继续
+    default microgame02_return = "choice_a"
     if microgame02_return == "choice_a":
         jump chapter1_act2_scene2_continue
     elif microgame02_return == "choice_b":
@@ -312,6 +314,7 @@ label chapter1_act2_scene2_choice_b:
     narrator "他从工具箱里拿出重型园艺剪，'咔嚓咔嚓'几剪子下去，粗韧的枯藤应声而落，干脆利落，没用几分钟，缠在灯杆上的枯藤就被清理得干干净净。你在一旁看着，不得不佩服他的手艺，连灯杆缝隙里的细藤，都被他用小钳子挑了出来。"
 
     # 【游戏触发预留位置】打开老李的工具箱游戏
+    $ microgame02_return = "choice_b"
     jump microgame02
 
     hide p4

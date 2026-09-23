@@ -10,6 +10,20 @@ init python:
     # 跨 interaction 复用的 displayable 实例（拖拽/动画状态不因 screen 重建而丢失）
     huarong_displayable = None
 
+    # 方块名 -> PNG 素材路径
+    BLOCK_IMAGES = {
+        "真武殿": "images/microgames/华容道/hrd_zhenwudian_400x400.png",
+        "戏台":   "images/microgames/华容道/hrd_xitai_400x200.png",
+        "魁星楼": "images/microgames/华容道/hrd_kuixinglou_200x400.png",
+        "可汗庙": "images/microgames/华容道/hrd_kehanmiao_200x400.png",
+        "古地道": "images/microgames/华容道/hrd_gudidao_v_200x400.png",
+        "古堡墙": "images/microgames/华容道/hrd_gubaoqiang_s_200x200.png",
+        "琉璃碑": "images/microgames/华容道/hrd_liulibei_200x200.png",
+        "古槐":   "images/microgames/华容道/hrd_guhuai_200x200.png",
+        "地道口": "images/microgames/华容道/hrd_didaokou_200x200.png",
+        "南门楼": "images/microgames/华容道/hrd_nanmenlou_200x200.png",
+    }
+
 
     class HuarongDisplayable(renpy.Displayable):
         """华容道 渲染+输入层。
@@ -37,15 +51,43 @@ init python:
             # 滑动动画：id(block) -> [display_x, display_y]（向逻辑位置指数收敛）
             self.anim = {}
 
-            # 方块名字字体（系统字体；加载失败则只画色块）
-            self.font = None
-            for fp in ("C:/Windows/Fonts/msyh.ttc", "C:/Windows/Fonts/simhei.ttf",
-                       "C:/Windows/Fonts/simsun.ttc"):
-                try:
-                    self.font = pygame.font.Font(fp, 18)
-                    break
-                except Exception:
-                    continue
+            # 加载方块 PNG 素材（运行时缩放到对应格数尺寸）
+            self.block_images = {}
+            self._load_images()
+
+        def _load_images(self):
+            """加载方块 PNG，按格数缩放到 width*100 × height*100"""
+            cs = self.cell_size
+            sizes = {
+                "真武殿": (2*cs, 2*cs),   # 200×200
+                "戏台":   (2*cs, 1*cs),   # 200×100
+                "魁星楼": (1*cs, 2*cs),   # 100×200
+                "可汗庙": (1*cs, 2*cs),
+                "古地道": (1*cs, 2*cs),
+                "古堡墙": (1*cs, 1*cs),   # 100×100
+                "琉璃碑": (1*cs, 1*cs),
+                "古槐":   (1*cs, 1*cs),
+                "地道口": (1*cs, 1*cs),
+                "南门楼": (1*cs, 1*cs),
+            }
+            for name, path in BLOCK_IMAGES.items():
+                surf = renpy.load_surface(path)
+                tw, th = sizes[name]
+                self.block_images[name] = pygame.transform.smoothscale(surf, (tw, th))
+
+        def __getstate__(self):
+            """存档/重载时：pygame Surface 不可序列化，只保留逻辑状态，加载后重建图片"""
+            state = self.__dict__.copy()
+            state['block_images'] = {}
+            state['drag_block'] = None
+            state['drag_target'] = None
+            state['anim'] = {}
+            return state
+
+        def __setstate__(self, state):
+            self.__dict__.update(state)
+            self.block_images = {}
+            self._load_images()
 
         # ---------- 渲染 ----------
         def render(self, width, height, st, at):
@@ -59,43 +101,37 @@ init python:
                              (gsx - 12, gsy - 12, bw * cs + 24, bh * cs + 24))
             pygame.draw.rect(surf, _huarong_hex(HUARONG_COLORS['board']),
                              (gsx - 6, gsy - 6, bw * cs + 12, bh * cs + 12))
-            # 格子线
+            # 格子线（与方块逻辑坐标严格对齐：第x列线 = gsx + x*cs）
             for i in range(bw + 1):
                 pygame.draw.line(surf, _huarong_hex(HUARONG_COLORS['border']),
-                                 (gsx - 6 + i * cs, gsy - 6), (gsx - 6 + i * cs, gsy + bh * cs + 6), 1)
+                                 (gsx + i * cs, gsy), (gsx + i * cs, gsy + bh * cs), 1)
             for j in range(bh + 1):
                 pygame.draw.line(surf, _huarong_hex(HUARONG_COLORS['border']),
-                                 (gsx - 6, gsy - 6 + j * cs), (gsx + bw * cs + 6, gsy - 6 + j * cs), 1)
+                                 (gsx, gsy + j * cs), (gsx + bw * cs, gsy + j * cs), 1)
 
             # 出口标记（底部 2 格宽）
             exit_y = gsy + bh * cs
             pygame.draw.rect(surf, _huarong_hex(HUARONG_COLORS['exit']),
                              (gsx + cs, exit_y - 8, cs * 2, 8))
-            if self.font:
-                try:
-                    lbl = self.font.render("出口", True, _huarong_hex(HUARONG_COLORS['exit']))
-                    surf.blit(lbl, (int(gsx + cs * 2 - lbl.get_width() / 2), int(exit_y + 10)))
-                except Exception:
-                    pass
 
-            # 方块（含滑动动画插值）
+            # 方块（含滑动动画插值，blit PNG）
             for block in self.game.blocks:
                 px, py = self._block_display_pos(block)
-                w = block.width * cs - 4
-                h = block.height * cs - 4
-                col = _huarong_hex(block.color)
-                pygame.draw.rect(surf, col, (int(px + 2), int(py + 2), w, h))
-                # 边框：选中金边，否则深色
-                bc = (255, 215, 0) if block.selected else _huarong_hex(HUARONG_COLORS['border'])
-                pygame.draw.rect(surf, bc, (int(px + 2), int(py + 2), w, h), 2)
-                # 名字
-                if self.font:
-                    try:
-                        label = self.font.render(block.name, True, (255, 255, 255))
-                        surf.blit(label, (int(px + 2 + w / 2 - label.get_width() / 2),
-                                          int(py + 2 + h / 2 - label.get_height() / 2)))
-                    except Exception:
-                        pass
+                img = self.block_images.get(block.name)
+                if img:
+                    surf.blit(img, (int(px), int(py)))
+                    # 选中时金色高亮边框
+                    if block.selected:
+                        pygame.draw.rect(surf, (255, 215, 0),
+                            (int(px)-2, int(py)-2, img.get_width()+4, img.get_height()+4), 3)
+                else:
+                    # 兜底：没图就画色块
+                    w = block.width * cs - 4
+                    h = block.height * cs - 4
+                    col = _huarong_hex(block.color)
+                    pygame.draw.rect(surf, col, (int(px + 2), int(py + 2), w, h))
+                    bc = (255, 215, 0) if block.selected else _huarong_hex(HUARONG_COLORS['border'])
+                    pygame.draw.rect(surf, bc, (int(px + 2), int(py + 2), w, h), 2)
 
             # 每帧强制重绘
             renpy.redraw(self, 0)
@@ -169,9 +205,12 @@ init python:
                     if steps > 0:
                         # 落格：逐格滑动并计数（moves + 胜利判定在逻辑层完成）
                         if abs(dx) >= abs(dy):
-                            self.game.move_block_steps(1 if dx > 0 else -1, 0, steps)
+                            moved = self.game.move_block_steps(1 if dx > 0 else -1, 0, steps)
                         else:
-                            self.game.move_block_steps(0, 1 if dy > 0 else -1, steps)
+                            moved = self.game.move_block_steps(0, 1 if dy > 0 else -1, steps)
+                        # 实际移动了才播音效（拖一下多格只响一次）
+                        if moved > 0:
+                            _play_move_sound()
                         # 刷新 screen 文本（步数/胜利界面）—— 仅松手一次，不卡
                         renpy.restart_interaction()
                     # 清理拖拽
@@ -192,9 +231,20 @@ init python:
             return n
 
 
+    def _play_move_sound():
+        """播放移动音效：先停再播，避免连续移动时音效重叠"""
+        renpy.sound.stop(channel="sound")
+        renpy.sound.play("audio/huarong_move.mp3", channel="sound", loop=False)
+
+
     def huarong_move(game, dx, dy):
-        """键盘移动一格，并强制刷新界面"""
-        game.move_block(dx, dy)
+        """键盘移动一格（实际移动才播音效），并强制刷新界面"""
+        block = game.selected_block
+        if block is not None:
+            bx, by = block.x, block.y
+            game.move_block(dx, dy)
+            if block.x != bx or block.y != by:
+                _play_move_sound()
         renpy.restart_interaction()
 
 

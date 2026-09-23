@@ -55,6 +55,19 @@ init python:
             self.shape_images = {}
             self._load_images()
 
+        def __getstate__(self):
+            """存档/重载时：pygame Surface 不可序列化，只保留逻辑状态，加载后重建图片"""
+            state = self.__dict__.copy()
+            state['shape_images'] = {}
+            state['_rot_cache'] = {}
+            return state
+
+        def __setstate__(self, state):
+            self.__dict__.update(state)
+            self.shape_images = {}
+            self._rot_cache = {}
+            self._load_images()
+
         def _load_images(self):
             """加载工具 PNG：白底抠透明后缩放到基础尺寸（240x160 / 160x160 / 320x80）"""
             cs = self.cell_size
@@ -181,6 +194,7 @@ init python:
                 idx = self._hit_shape_slot(x, y)
                 if idx is not None:
                     self.puzzle.start_dragging(idx)
+                    _play_star_sound()  # 拾起播音效
                     renpy.redraw(self, 0)
 
             elif ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 3:
@@ -195,6 +209,9 @@ init python:
                     gx, gy, in_grid = self._hover_grid(x, y)
                     if in_grid:
                         self.puzzle.place_shape(gx, gy)
+                        # 放置成功（拖拽状态被清除）才播音效；失败/越界不播
+                        if self.puzzle.dragging_shape is None:
+                            _play_star_sound()
                     else:
                         # 拖到网格外松手 = 取消
                         self.puzzle.cancel_dragging()
@@ -256,6 +273,12 @@ init python:
         disp = getattr(puzzle, "_displayable", None)
         if disp is not None:
             renpy.redraw(disp, 0)
+
+
+    def _play_star_sound():
+        """播放星纹拾起/放置音效：先停再播，避免连续操作时音效重叠"""
+        renpy.sound.stop(channel="sound")
+        renpy.sound.play("audio/star_pattern_tap.mp3", channel="sound", loop=False)
 
 
     def star_pattern_rotate(puzzle):
