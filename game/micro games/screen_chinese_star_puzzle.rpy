@@ -37,9 +37,8 @@ init python:
             self.magenta_ring = self._make_soft_ring(
                 self.mag_inner, self.mag_outer, _disk_hex_rgb(STAR_COLORS['MAGENTA']))
 
-            # 运动虚影状态：最近几帧盘角快照 + 上一帧角度（用于判断是否在移动）
-            self._trail = []
-            self._prev_angles = None
+            # 恒星移动特效：每颗星的位置历史（id -> [(x, y), ...]，最新在后）
+            self._star_hist = {}
 
         def _make_soft_ring(self, inner, outer, rgb):
             """生成软边纯色圆环 Surface：alpha 沿半径从内/外边缘(0)向环带中间(255)渐变。
@@ -72,46 +71,6 @@ init python:
             surf.blit(self.magenta_ring, (CX - self.magenta_ring.get_width() // 2,
                                           CY - self.magenta_ring.get_height() // 2))
 
-            # ---- 运动虚影：记录盘角快照；移动时追加，静止时逐帧淡出 ----
-            d1, d2 = g.disk1_angle, g.disk2_angle
-            if (d1, d2) != self._prev_angles:
-                self._trail.append((d1, d2))
-                if len(self._trail) > 5:
-                    self._trail.pop(0)
-            elif self._trail:
-                self._trail.pop(0)
-            self._prev_angles = (d1, d2)
-
-            # 按历史角度绘制渐隐残影（刻度线 + 恒星），越旧越淡
-            for ti, (td1, td2) in enumerate(self._trail):
-                ga = int(255 * 0.22 * (ti + 1) / len(self._trail))
-                if ga <= 2:
-                    continue
-                cyan_a = _disk_hex_rgb(STAR_COLORS['CYAN']) + (ga,)
-                mag_a = _disk_hex_rgb(STAR_COLORS['MAGENTA']) + (ga,)
-                gold_a = _disk_hex_rgb(STAR_COLORS['GOLD']) + (ga,)
-                for i in range(12):
-                    a1 = 2 * math.pi * i / 12 + td1
-                    x1 = int(CX + self.cyan_inner * math.cos(a1))
-                    y1 = int(CY + self.cyan_inner * math.sin(a1))
-                    x2 = int(CX + self.cyan_outer * math.cos(a1))
-                    y2 = int(CY + self.cyan_outer * math.sin(a1))
-                    pygame.draw.line(surf, cyan_a, (x1, y1), (x2, y2), 1)
-                for i in range(12):
-                    a2 = 2 * math.pi * i / 12 + td2
-                    x1 = int(CX + self.mag_inner * math.cos(a2))
-                    y1 = int(CY + self.mag_inner * math.sin(a2))
-                    x2 = int(CX + self.mag_outer * math.cos(a2))
-                    y2 = int(CY + self.mag_outer * math.sin(a2))
-                    pygame.draw.line(surf, mag_a, (x1, y1), (x2, y2), 1)
-                for star in g.stars:
-                    ang = star['base_angle'] - (td1 if star['disk'] == 1 else td2)
-                    r_ = star['orbit_radius']
-                    sx = int(CX + r_ * math.cos(ang))
-                    sy = int(CY + r_ * math.sin(ang))
-                    pygame.draw.circle(surf, gold_a, (sx, sy), 16, 1)
-                    pygame.draw.rect(surf, gold_a, (sx - 7, sy - 7, 14, 14))
-
             # 刻度线（蓝盘 / 红盘各 12 条，随盘旋转）
             for i in range(12):
                 a1 = 2 * math.pi * i / 12 + g.disk1_angle
@@ -131,27 +90,61 @@ init python:
             # 中心点
             pygame.draw.rect(surf, _disk_hex_rgb(STAR_COLORS['WHITE']), (CX - 3, CY - 3, 6, 6))
 
-            # 目标位置提示圈
-            for star_id, (tx, ty) in ALL_STAR_TARGETS.items():
-                pygame.draw.circle(surf, _disk_hex_rgb(STAR_COLORS['GRAY']),
-                                   (CX + tx, CY + ty), 12, 2)
-
-            # 恒星（主体 + 光晕 + 选中/接近高亮）
+            # 目标位置提示圈（每局随恒星随机布局生成）
             for star in g.stars:
-                sx, sy = g.get_star_position(star)
-                sx, sy = int(sx), int(sy)
+                pygame.draw.circle(surf, _disk_hex_rgb(STAR_COLORS['GRAY']),
+                                   (CX + int(star['target_x']), CY + int(star['target_y'])), 12, 2)
+
+            # 恒星（主体 + 光晕 + 移动特效 + 选中/接近高亮）
+            gold = _disk_hex_rgb(STAR_COLORS['GOLD'])
+            for star in g.stars:
+                fx, fy = g.get_star_position(star)
+                sx, sy = int(fx), int(fy)
                 dist = g.get_star_distance(star)
+                sid = star['id']
+
+                # ---- 移动特效 ----
+                hist = self._star_hist.setdefault(sid, [])
+                speed = math.hypot(fx - hist[-1][0], fy - hist[-1][1]) if hist else 0.0
+                moving = speed > 0.5
+                if moving:
+                    hist.append((fx, fy))
+                    if len(hist) > 10:
+                        hist.pop(0)
+                    # 彗尾：沿历史轨迹渐隐渐细
+                    n = len(hist)
+                    for i in range(n - 1):
+                        ta = int(110 * (i + 1) / n)
+                        if ta <= 2:
+                            continue
+                        pygame.draw.line(surf, gold + (ta,),
+                                         (int(hist[i][0]), int(hist[i][1])),
+                                         (int(hist[i + 1][0]), int(hist[i + 1][1])), 2)
+                    # 四芒星闪光：长度随速度与时间轻微脉动
+                    flare = (6 + min(speed, 24)) * (1.0 + 0.25 * math.sin(st * 8 + sid))
+                    fa = int(150 * min(1.0, speed / 12.0))
+                    if fa > 2:
+                        for ddx, ddy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                            pygame.draw.line(surf, gold + (fa,),
+                                             (sx + ddx * 9, sy + ddy * 9),
+                                             (sx + int(ddx * flare), sy + int(ddy * flare)), 1)
+                elif hist:
+                    hist.pop(0)  # 停止时尾巴逐帧收回
+
+                # 移动中的柔光填充
+                if moving:
+                    pygame.draw.circle(surf, gold + (60,), (sx, sy), 12)
 
                 # 光晕环（接近目标越亮）
                 if dist < 100:
-                    pygame.draw.circle(surf, _disk_hex_rgb(STAR_COLORS['GOLD']), (sx, sy), 20, 2)
+                    pygame.draw.circle(surf, gold, (sx, sy), 20, 2)
                 else:
-                    pygame.draw.circle(surf, _disk_hex_rgb(STAR_COLORS['GOLD']), (sx, sy), 16, 1)
+                    pygame.draw.circle(surf, gold, (sx, sy), 16, 1)
                 # 主体
-                pygame.draw.rect(surf, _disk_hex_rgb(STAR_COLORS['GOLD']), (sx - 7, sy - 7, 14, 14))
+                pygame.draw.rect(surf, gold, (sx - 7, sy - 7, 14, 14))
                 # 选中盘恒星：金圈
                 if g.selected_disk == star['disk']:
-                    pygame.draw.circle(surf, _disk_hex_rgb(STAR_COLORS['GOLD']), (sx, sy), 10, 2)
+                    pygame.draw.circle(surf, gold, (sx, sy), 10, 2)
 
             # 每帧强制重绘（官方持续动画模式）
             renpy.redraw(self, 0)

@@ -109,26 +109,49 @@ init python:
         'MAGENTA_SCALE': 5.25,
     }
 
-    # 恒星目标坐标（相对中心CX/CY）
-    # 蓝色圆盘目标（轨道半径180）
-    STAR_TARGETS = {
-        0: (-156, 90),
-        1: (-156, -90),
-        2: (156, -90),
-    }
-    # 红色圆盘目标（轨道半径210）
-    STAR_TARGETS_2 = {
-        3: (182, 105),
-        4: (0, 210),
-        5: (-182, 105),
-    }
-    ALL_STAR_TARGETS = {}
-    ALL_STAR_TARGETS.update(STAR_TARGETS)
-    ALL_STAR_TARGETS.update(STAR_TARGETS_2)
+    # 恒星目标坐标不再使用固定常量：每局在 reset_game 中随机生成
+    # （恒星在轨道圈上随机分布，目标圈由随机偏移 Δ 推导，保证必定有解）
 
     class StarPuzzleGame:
         def __init__(self):
             self.reset_game()
+
+        @staticmethod
+        def _random_solve_delta(rng, disk_angle_init):
+            """随机生成目标整体偏移 Δ（弧度），保证开局未解出（距初始盘角≥40°）。
+
+            目标世界角 = 恒星 base_angle - Δ：整盘转到 Δ 时该盘全部恒星
+            同时落进各自目标圈，随机布局必定有解。
+            """
+            while True:
+                d = rng.uniform(0, 2 * math.pi)
+                diff = abs((d - disk_angle_init + math.pi) % (2 * math.pi) - math.pi)
+                if diff >= math.radians(40):
+                    return d
+
+        @staticmethod
+        def _random_disk_stars(rng, sid_start, orbit_radius, disk_angle_init, disk_id):
+            """生成一局随机布局的一组恒星（3 颗）。
+
+            恒星在轨道圈上按 120° 槽位 ±35° 抖动随机分布（避免重叠），
+            目标圈位置 = 恒星基角 - Δ。
+            """
+            slot0 = rng.uniform(0, 2 * math.pi)
+            delta = StarPuzzleGame._random_solve_delta(rng, disk_angle_init)
+            stars = []
+            for i in range(3):
+                base_a = slot0 + i * 2 * math.pi / 3 + rng.uniform(-0.61, 0.61)
+                ta = base_a - delta
+                stars.append({
+                    "id": sid_start + i,
+                    "disk": disk_id,
+                    "base_angle": base_a,
+                    "current_angle": base_a - disk_angle_init,
+                    "orbit_radius": orbit_radius,
+                    "target_x": orbit_radius * math.cos(ta),
+                    "target_y": orbit_radius * math.sin(ta),
+                })
+            return stars
 
         def reset_game(self):
             # 圆盘初始旋转角度
@@ -137,32 +160,13 @@ init python:
             # 目标角度（阻尼追踪：实际角度每帧向目标逼近）
             self.disk1_target = self.disk1_angle
             self.disk2_target = self.disk2_angle
+            # 每次游玩随机布局：恒星随机分布在各自轨道圈上，目标圈随之推导
+            rng = random.Random()
             self.stars = []
-            # 蓝色圆盘恒星 0/1/2
-            blue_base = [5*math.pi/6, 7*math.pi/6, 11*math.pi/6]
-            for idx, base_a in enumerate(blue_base):
-                self.stars.append({
-                    "id": idx,
-                    "disk": 1,
-                    "base_angle": base_a,
-                    "current_angle": base_a - self.disk1_angle,
-                    "orbit_radius": DISK_CONFIG["ORBIT_RADIUS"],
-                    "target_x": STAR_TARGETS[idx][0],
-                    "target_y": STAR_TARGETS[idx][1],
-                })
-            # 红色圆盘恒星 3/4/5
-            red_base = [math.pi/6, math.pi/2, 5*math.pi/6]
-            for idx, base_a in enumerate(red_base):
-                sid = idx + 3
-                self.stars.append({
-                    "id": sid,
-                    "disk": 2,
-                    "base_angle": base_a,
-                    "current_angle": base_a - self.disk2_angle,
-                    "orbit_radius": DISK_CONFIG["ORBIT_RADIUS"] + 30,
-                    "target_x": STAR_TARGETS_2[sid][0],
-                    "target_y": STAR_TARGETS_2[sid][1],
-                })
+            self.stars += self._random_disk_stars(
+                rng, 0, DISK_CONFIG["ORBIT_RADIUS"], self.disk1_angle, 1)
+            self.stars += self._random_disk_stars(
+                rng, 3, DISK_CONFIG["ORBIT_RADIUS"] + 30, self.disk2_angle, 2)
             self.selected_disk = None
             self.won = False
             self.dragging = False
