@@ -134,6 +134,9 @@ init python:
             # 圆盘初始旋转角度
             self.disk1_angle = math.radians(-83)
             self.disk2_angle = math.radians(147)
+            # 目标角度（阻尼追踪：实际角度每帧向目标逼近）
+            self.disk1_target = self.disk1_angle
+            self.disk2_target = self.disk2_angle
             self.stars = []
             # 蓝色圆盘恒星 0/1/2
             blue_base = [5*math.pi/6, 7*math.pi/6, 11*math.pi/6]
@@ -214,18 +217,45 @@ init python:
             dx = mx - CX
             dy = my - CY
             curr_ang = math.atan2(dy, dx)
-            delta_ang = curr_ang - self.last_mouse_angle
-            sensitivity = 0.8
+            # 中心死区：鼠标太靠近盘心时 atan2 角度不可靠，只重新锚定不旋转，
+            # 避免扫过中心时盘面/恒星剧烈摆动
+            if math.hypot(dx, dy) < 40:
+                self.last_mouse_angle = curr_ang
+                return
+            # 角增量归一化到 (-π, π]：防止鼠标跨 ±180° 边界时盘面瞬间跳转一圈
+            delta_ang = (curr_ang - self.last_mouse_angle + math.pi) % (2 * math.pi) - math.pi
+            # 灵敏度：盘目标角增量 = 鼠标角增量 * 灵敏度（调低 = 转动更不灵敏）
+            sensitivity = 0.45
             if self.selected_disk == 1:
-                self.disk1_angle += delta_ang * sensitivity
+                self.disk1_target += delta_ang * sensitivity
             else:
-                self.disk2_angle += delta_ang * sensitivity
+                self.disk2_target += delta_ang * sensitivity
             self.last_mouse_angle = curr_ang
+
+        def update(self):
+            """阻尼推进：实际角度每帧向目标角度按比例逼近（由渲染层每帧调用）。
+
+            damping 为单帧收敛比例，越小盘越"重"、跟随越滞后。
+            """
+            damping = 0.18
+            for axis in ("disk1", "disk2"):
+                target = getattr(self, axis + "_target")
+                current = getattr(self, axis + "_angle")
+                diff = target - current
+                if abs(diff) < 1e-4:
+                    setattr(self, axis + "_angle", target)
+                else:
+                    setattr(self, axis + "_angle", current + diff * damping)
             self.update_star_angles()
             self.check_win()
 
         def stop_drag(self):
             self.dragging = False
+            # 松手时一次收敛剩余差值，保证胜利判定立即生效
+            self.disk1_angle = self.disk1_target
+            self.disk2_angle = self.disk2_target
+            self.update_star_angles()
+            self.check_win()
 
         def check_win(self):
             for star in self.stars:

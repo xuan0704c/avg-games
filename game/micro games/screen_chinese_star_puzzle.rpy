@@ -1,7 +1,6 @@
 init python:
     import math
     import pygame
-    import random
 
     def _disk_hex_rgb(hex_color):
         """'#RRGGBB' -> (R, G, B) 元组，供 pygame.draw 使用"""
@@ -22,53 +21,111 @@ init python:
             self.game = game
             self.width = CANVAS_WIDTH
             self.height = CANVAS_HEIGHT
-            # 背景星点（固定 seed，纯装饰）
-            rng = random.Random(20260923)
-            self.stars_bg = [(rng.randint(0, CANVAS_WIDTH), rng.randint(0, CANVAS_HEIGHT),
-                              rng.randint(1, 3)) for _ in range(140)]
+            # 背景图（chapter1/11.png，1920x1080，与画布同尺寸）
+            self.bg_image = pygame.transform.smoothscale(
+                renpy.load_surface("images/chapter1/11.png"), (self.width, self.height))
 
-        # ---------- 渲染 ----------
-        def render(self, width, height, st, at):
-            g = self.game
-            surf = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
-            surf.fill(_disk_hex_rgb(STAR_COLORS['BACKGROUND']))
-
-            # 背景星点
-            for (sx, sy, ss) in self.stars_bg:
-                pygame.draw.rect(surf, (255, 255, 255), (sx, sy, ss, ss))
-
-            # 圆盘尺寸
+            # 圆盘半径（环带不随盘旋转，软边圆环只需预计算一次）
             cyan_outer = DISK_CONFIG['DISK_RADIUS'] * DISK_CONFIG['CYAN_SCALE']      # 270
             cyan_inner = cyan_outer * 6 / 7                                          # ~231
             mag_outer = DISK_CONFIG['DISK_RADIUS'] * DISK_CONFIG['MAGENTA_SCALE']    # 315
             mag_inner = mag_outer * 6 / 7                                            # 270
+            self.cyan_inner, self.cyan_outer = int(cyan_inner), int(cyan_outer)
+            self.mag_inner, self.mag_outer = int(mag_inner), int(mag_outer)
+            self.cyan_ring = self._make_soft_ring(
+                self.cyan_inner, self.cyan_outer, _disk_hex_rgb(STAR_COLORS['CYAN']))
+            self.magenta_ring = self._make_soft_ring(
+                self.mag_inner, self.mag_outer, _disk_hex_rgb(STAR_COLORS['MAGENTA']))
 
-            # 蓝色圆盘：同心圆描边堆叠（仿原版填充效果）
-            for r in range(int(cyan_inner), int(cyan_outer) + 1, 5):
-                pygame.draw.circle(surf, _disk_hex_rgb(STAR_COLORS['CYAN']), (CX, CY), r, 1)
-            pygame.draw.circle(surf, _disk_hex_rgb(STAR_COLORS['CYAN']), (CX, CY), int(cyan_outer), 2)
-            pygame.draw.circle(surf, _disk_hex_rgb(STAR_COLORS['CYAN']), (CX, CY), int(cyan_inner), 2)
+            # 运动虚影状态：最近几帧盘角快照 + 上一帧角度（用于判断是否在移动）
+            self._trail = []
+            self._prev_angles = None
 
-            # 红色圆盘
-            for r in range(int(mag_inner), int(mag_outer) + 1, 5):
-                pygame.draw.circle(surf, _disk_hex_rgb(STAR_COLORS['MAGENTA']), (CX, CY), r, 1)
-            pygame.draw.circle(surf, _disk_hex_rgb(STAR_COLORS['MAGENTA']), (CX, CY), int(mag_outer), 2)
-            pygame.draw.circle(surf, _disk_hex_rgb(STAR_COLORS['MAGENTA']), (CX, CY), int(mag_inner), 2)
+        def _make_soft_ring(self, inner, outer, rgb):
+            """生成软边纯色圆环 Surface：alpha 沿半径从内/外边缘(0)向环带中间(255)渐变。
+
+            用 1px 同心圆按渐变 alpha 堆叠（pygame C 速绘制），仅初始化时调用一次。
+            """
+            size = outer * 2 + 4
+            surf = pygame.Surface((size, size), pygame.SRCALPHA)
+            c = size // 2
+            mid = (inner + outer) / 2.0
+            half = max(1.0, (outer - inner) / 2.0)
+            for r in range(inner, outer + 1):
+                a = int(255 * (1.0 - abs(r - mid) / half))
+                if a > 0:
+                    pygame.draw.circle(surf, rgb + (a,), (c, c), r, 1)
+            return surf
+
+        # ---------- 渲染 ----------
+        def render(self, width, height, st, at):
+            g = self.game
+            # 阻尼推进：每帧向目标角度逼近（拖拽跟手带惯性感）
+            g.update()
+            surf = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+            # 背景图
+            surf.blit(self.bg_image, (0, 0))
+
+            # 蓝色/红色圆盘：软边纯色圆环（初始化时预计算，直接 blit）
+            surf.blit(self.cyan_ring, (CX - self.cyan_ring.get_width() // 2,
+                                       CY - self.cyan_ring.get_height() // 2))
+            surf.blit(self.magenta_ring, (CX - self.magenta_ring.get_width() // 2,
+                                          CY - self.magenta_ring.get_height() // 2))
+
+            # ---- 运动虚影：记录盘角快照；移动时追加，静止时逐帧淡出 ----
+            d1, d2 = g.disk1_angle, g.disk2_angle
+            if (d1, d2) != self._prev_angles:
+                self._trail.append((d1, d2))
+                if len(self._trail) > 5:
+                    self._trail.pop(0)
+            elif self._trail:
+                self._trail.pop(0)
+            self._prev_angles = (d1, d2)
+
+            # 按历史角度绘制渐隐残影（刻度线 + 恒星），越旧越淡
+            for ti, (td1, td2) in enumerate(self._trail):
+                ga = int(255 * 0.22 * (ti + 1) / len(self._trail))
+                if ga <= 2:
+                    continue
+                cyan_a = _disk_hex_rgb(STAR_COLORS['CYAN']) + (ga,)
+                mag_a = _disk_hex_rgb(STAR_COLORS['MAGENTA']) + (ga,)
+                gold_a = _disk_hex_rgb(STAR_COLORS['GOLD']) + (ga,)
+                for i in range(12):
+                    a1 = 2 * math.pi * i / 12 + td1
+                    x1 = int(CX + self.cyan_inner * math.cos(a1))
+                    y1 = int(CY + self.cyan_inner * math.sin(a1))
+                    x2 = int(CX + self.cyan_outer * math.cos(a1))
+                    y2 = int(CY + self.cyan_outer * math.sin(a1))
+                    pygame.draw.line(surf, cyan_a, (x1, y1), (x2, y2), 1)
+                for i in range(12):
+                    a2 = 2 * math.pi * i / 12 + td2
+                    x1 = int(CX + self.mag_inner * math.cos(a2))
+                    y1 = int(CY + self.mag_inner * math.sin(a2))
+                    x2 = int(CX + self.mag_outer * math.cos(a2))
+                    y2 = int(CY + self.mag_outer * math.sin(a2))
+                    pygame.draw.line(surf, mag_a, (x1, y1), (x2, y2), 1)
+                for star in g.stars:
+                    ang = star['base_angle'] - (td1 if star['disk'] == 1 else td2)
+                    r_ = star['orbit_radius']
+                    sx = int(CX + r_ * math.cos(ang))
+                    sy = int(CY + r_ * math.sin(ang))
+                    pygame.draw.circle(surf, gold_a, (sx, sy), 16, 1)
+                    pygame.draw.rect(surf, gold_a, (sx - 7, sy - 7, 14, 14))
 
             # 刻度线（蓝盘 / 红盘各 12 条，随盘旋转）
             for i in range(12):
                 a1 = 2 * math.pi * i / 12 + g.disk1_angle
-                x1 = int(CX + cyan_inner * math.cos(a1))
-                y1 = int(CY + cyan_inner * math.sin(a1))
-                x2 = int(CX + cyan_outer * math.cos(a1))
-                y2 = int(CY + cyan_outer * math.sin(a1))
+                x1 = int(CX + self.cyan_inner * math.cos(a1))
+                y1 = int(CY + self.cyan_inner * math.sin(a1))
+                x2 = int(CX + self.cyan_outer * math.cos(a1))
+                y2 = int(CY + self.cyan_outer * math.sin(a1))
                 pygame.draw.line(surf, _disk_hex_rgb(STAR_COLORS['CYAN']), (x1, y1), (x2, y2), 1)
             for i in range(12):
                 a2 = 2 * math.pi * i / 12 + g.disk2_angle
-                x1 = int(CX + mag_inner * math.cos(a2))
-                y1 = int(CY + mag_inner * math.sin(a2))
-                x2 = int(CX + mag_outer * math.cos(a2))
-                y2 = int(CY + mag_outer * math.sin(a2))
+                x1 = int(CX + self.mag_inner * math.cos(a2))
+                y1 = int(CY + self.mag_inner * math.sin(a2))
+                x2 = int(CX + self.mag_outer * math.cos(a2))
+                y2 = int(CY + self.mag_outer * math.sin(a2))
                 pygame.draw.line(surf, _disk_hex_rgb(STAR_COLORS['MAGENTA']), (x1, y1), (x2, y2), 1)
 
             # 中心点
@@ -121,6 +178,11 @@ init python:
             return None
 
 
+    # 跨 interaction 复用的 displayable 实例（构造较重：背景缩放+软边圆环预计算，
+    # 避免每次 restart_interaction 重建造成的卡顿/跳动）
+    star_disk_displayable = None
+
+
     def star_disk_reset(game):
         """重置星空圆盘并强制刷新界面"""
         game.reset_level()
@@ -133,8 +195,13 @@ screen chinese_star_puzzle_game(game=None):
 
     default local_game = game
 
-    # 整幅游戏渲染 + 输入（单 displayable，状态全在 game 逻辑层，可安全重建）
-    add StarDiskDisplayable(local_game) pos (0, 0)
+    # 复用全局实例：同一局游戏不重建，避免松手 restart_interaction 时重建卡顿
+    python:
+        if star_disk_displayable is None or star_disk_displayable.game is not local_game:
+            star_disk_displayable = StarDiskDisplayable(local_game)
+
+    # 整幅游戏渲染 + 输入（单 displayable，状态全在 game 逻辑层）
+    add star_disk_displayable pos (0, 0)
 
     text "星空圆盘" size 60 color STAR_COLORS['WHITE'] xalign 0.5 ypos 20
 
